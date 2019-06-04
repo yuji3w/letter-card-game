@@ -2,6 +2,8 @@ from enum import Enum
 from enum import IntEnum
 from random import randint
 
+DEBUG = True
+
 fullDeck = []
 partialDeck = []
 playerList = []
@@ -49,7 +51,7 @@ class player:
 		return cardName(card)
 
 	def input_player_no(self):
-		playerNo = int(input("What is the player number?"))
+		playerNo = int(input("What is the player number? (Player 0, 1, etc)"))
 		return playerNo
 
 	def card_in_hand(self, card):
@@ -69,14 +71,15 @@ class player:
 		self.hand.append(card)
 
 	def countess_condition(self):
-		if (self.hand[0].name == cardType.PRINCE or self.hand[0].name == cardType.KING or 
-			self.hand[1].name == cardType.PRINCE or self.hand[1].name == cardType.PRINCE):
-			if self.hand[0].name == cardType.COUNTESS or self.hand[1].name == cardType.COUNTESS:
+		if (self.hand[0].name == cardName.PRINCE or self.hand[0].name == cardName.KING or 
+			self.hand[1].name == cardName.PRINCE or self.hand[1].name == cardName.PRINCE):
+			if self.hand[0].name == cardName.COUNTESS or self.hand[1].name == cardName.COUNTESS:
 				return True
 		return False
 
-	def start_turn(self):
-		self.draw_card(partialDeck)
+	def start_turn(self, restart = False):
+		if not restart:
+			self.draw_card(partialDeck)
 		self.status = status.NORMAL
 		self.display_cards()
 
@@ -88,10 +91,9 @@ class player:
 			card = self.input_card()
 		card = self.matching_card_obj(card)
 		playerNo = self.input_player_no()
-		playerNo = playerNo - 1
-		while playerNo > player.numPlayers:
+		while playerNo > player.numPlayers - 1:
 			print("This player does not exist.")
-			playerNo = self.input_player_no - 1
+			playerNo = self.input_player_no()
 		if card.name == cardName.GUARD:
 			print("Guess the card number.")
 			guess = self.input_card()
@@ -103,12 +105,12 @@ class player:
 
 
 	def turn(self, attackedPlayer, card, guess):
-		success = card.play(self, attackedPlayer, guess = cardName.GUARD)
+		success = card.play(self, attackedPlayer, guess)
 		if success:
-			self.hand.pop(card)
+			self.hand.remove(card)
 		else:
 			print("Your turn could not be completed.")
-			self.start_turn()
+			self.start_turn(restart = True)
 
 
 
@@ -165,10 +167,13 @@ class guard(cardType):
 		'''
 
 		if not self.is_player_normal(attackingPlayer, attackedPlayer):
+			print("Player unavailable.")
 			return False
 		if guess == cardName.GUARD:
+			print("You cannot guess guard.")
 			return False
-		if guess in attackedPlayer.hand:
+		if guess == attackedPlayer.hand[0].name:
+			print("You guessed correctly.")
 			attackedPlayer.status = status.ELIMINATED
 		return True
 
@@ -201,17 +206,18 @@ class baron(cardType):
 
 		if not self.is_player_normal(attackingPlayer, attackedPlayer):
 			return False
+		card2 = attackedPlayer.hand[0]
 		if self is attackingPlayer.hand[0]:
 			card = attackingPlayer.hand[1]
 		else:
 			card = attackingPlayer.hand[0]
 
-		card2 = attackedPlayer.hand[0]
 		if card.name.value > card2.name.value:
 			attackedPlayer.status = status.ELIMINATED
 		elif card.name.value < card2.name.value:
 			attackingPlayer.status = status.ELIMINATED
-
+		if attackingPlayer == attackedPlayer:
+			attackedPlayer.status = status.NORMAL
 		#if tie, nothing happens
 
 		return True
@@ -248,9 +254,18 @@ class prince(cardType):
 			return False
 		if partialDeck == []:
 			attackedPlayer.status = status.ELIMINATED
-		else:
+		elif attackingPlayer is not attackedPlayer:
 			attackedPlayer.hand.clear()
 			attackedPlayer.draw_card(partialDeck)
+		else:
+
+			#remove not self from hand so player can remove self later
+
+			if self is attackedPlayer.hand[0]:
+				attackedPlayer.hand.pop(1)
+				attackedPlayer.draw_card(partialDeck)
+			else:
+				attackedPlayer.hand.pop(0)
 		return True
 
 class king(cardType):
@@ -305,6 +320,36 @@ fullDeck = [
 
 partialDeck = list(fullDeck)
 
+#dump info of opponent for debug
 
-playerList = [player(), player()]
-playerList[0].start_turn()
+def dump_info():
+	for p in playerList:
+		print(p.playerNo)
+		print(p.status)
+		print()
+		for card in p.hand:
+			print(card.name)
+		print()
+		print()
+
+
+playerList = [player(), player(),player()]
+
+#playerList[0].hand.clear()
+#playerList[0].hand.append(princess())
+
+dump_info()
+
+playerNo = 0
+
+while len(partialDeck) > 0:
+	playerList[playerNo].start_turn()
+	playerNo = (playerNo + 1)%player.numPlayers
+
+#program continuous turns, end condition with 0 cards
+#TODO: program end conditions
+
+dump_info()
+
+#TODO: Create GarbageAI that inputs random numbers for a 4-person game
+#TODO: 
