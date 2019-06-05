@@ -12,6 +12,7 @@ class status(Enum):
 	ELIMINATED = 0
 	NORMAL = 1
 	PROTECTED = 2
+	WINNER = 3
 
 class cardName(IntEnum):
 	GUARD = 1
@@ -37,21 +38,34 @@ class player:
 		self.known = []
 
 		self.status = status.NORMAL
+		self.AI = False
 
 	def display_cards(self):
 		print("You have these cards:")
 		for i in range (0, len(self.hand)):
 			print(self.hand[i].name)
 
-	def input_card(self):
-		card = int(input("What is the card number?"))
+	def input_card(self, AI = False):
+		if AI:
+			card = randint(1,8)
+			print("AI say {}".format(card))
+		else:
+			card = int(input("What is the card number?"))
 		while card < 1 or card > 8:
 			print("This card does not exist.")
-			card = int(input("What is the card number?"))
+			if AI:
+				card = randint(1,8)
+				print("AI says {}".format(card))
+			else:
+				card = int(input("What is the card number?"))
 		return cardName(card)
 
-	def input_player_no(self):
-		playerNo = int(input("What is the player number? (Player 0, 1, etc)"))
+	def input_player_no(self, AI = False):
+		if AI:
+			playerNo = randint(0,len(playerList)-1)
+			print("AI says {}".format(playerNo))
+		else:
+			playerNo = int(input("What is the player number? (Player 0, 1, etc)"))
 		return playerNo
 
 	def card_in_hand(self, card):
@@ -70,6 +84,31 @@ class player:
 		card = deck.pop(rand_card)
 		self.hand.append(card)
 
+	def check_winner():
+		survivors = []
+		for p in playerList:
+			if p.status == status.NORMAL or p.status == status.PROTECTED:
+				survivors.append(p)
+		if len(survivors) < 2:
+			print("There is 1 or 0 players remaining.")
+			return True, survivors
+
+		winners = []
+		if len(partialDeck) == 0:
+			print("The partialDeck is empty")
+			#this must be done before cards are drawn for next turn. Call as class
+			bestCard = []
+			for p in survivors:
+				bestCard.append(p.hand[0].name.value)
+			bestCard = max(bestCard)
+			for p in survivors:
+				if p.hand[0].name.value == bestCard:
+					winners.append(p)
+				return True, winners
+
+
+		return False, survivors
+
 	def countess_condition(self):
 		if (self.hand[0].name == cardName.PRINCE or self.hand[0].name == cardName.KING or 
 			self.hand[1].name == cardName.PRINCE or self.hand[1].name == cardName.PRINCE):
@@ -78,31 +117,33 @@ class player:
 		return False
 
 	def start_turn(self, restart = False):
+		if self.status == status.ELIMINATED:
+			return False
 		if not restart:
 			self.draw_card(partialDeck)
 		self.status = status.NORMAL
-		self.display_cards()
 
 		#this is where the bot will be hooked up
 
-		card = self.input_card()
+		print()
+		print(self.playerNo)
+		self.display_cards()
+		card = self.input_card(AI = self.AI)
 		while not self.card_in_hand(card):
 			print("This card is not in your hand.")
-			card = self.input_card()
+			card = self.input_card(AI = self.AI)
 		card = self.matching_card_obj(card)
-		playerNo = self.input_player_no()
+		playerNo = self.input_player_no(AI = self.AI)
 		while playerNo > player.numPlayers - 1:
 			print("This player does not exist.")
-			playerNo = self.input_player_no()
+			playerNo = self.input_player_no(AI = self.AI)
 		if card.name == cardName.GUARD:
 			print("Guess the card number.")
-			guess = self.input_card()
+			guess = self.input_card(AI = self.AI)
 		else:
 			guess = cardName.GUARD
 
 		self.turn(playerList[playerNo], card, guess)
-
-
 
 	def turn(self, attackedPlayer, card, guess):
 		success = card.play(self, attackedPlayer, guess)
@@ -140,7 +181,7 @@ class cardType:
 		print("{} played {} against {}.".format(attackingPlayer.name, 
 			self.name, attackedPlayer.name))
 
-	def is_player_normal(self, attackingPlayer, attackedPlayer):
+	def is_player_normal(self, attackedPlayer):
 		#true if attackable, false if not
 		if (attackedPlayer.status == status.NORMAL):
 			return True
@@ -166,8 +207,8 @@ class guard(cardType):
 		attackedPlayer is eliminated if guess is correct
 		'''
 
-		if not self.is_player_normal(attackingPlayer, attackedPlayer):
-			print("Player unavailable.")
+		if not self.is_player_normal(attackedPlayer):
+			print("Player {} is unavailable".format(attackedPlayer))
 			return False
 		if guess == cardName.GUARD:
 			print("You cannot guess guard.")
@@ -175,6 +216,8 @@ class guard(cardType):
 		if guess == attackedPlayer.hand[0].name:
 			print("You guessed correctly.")
 			attackedPlayer.status = status.ELIMINATED
+		else:
+			print("You guessed incorrectly")
 		return True
 
 class spy(cardType):
@@ -186,7 +229,8 @@ class spy(cardType):
 		#spy reveals attackedPlayer.hand
 		#TODO: implement the lists of knowns
 
-		if not self.is_player_normal(attackingPlayer, attackedPlayer):
+		if not self.is_player_normal(attackedPlayer):
+			print("Player {} is unavailable".format(attackedPlayer))
 			return False
 		print("{} is Player {}'s card.".format(attackedPlayer.hand[0].name, 
 			attackedPlayer.playerNo))
@@ -200,11 +244,12 @@ class baron(cardType):
 
 		'''
 		compare hands with other player, higher hand wins
-		must have 2 cards in hand, if no cards left in incompleteDeck, game ends with
+		must have 2 cards in hand, if no cards left in partialDeck, game ends with
 		comparison
 		'''
 
-		if not self.is_player_normal(attackingPlayer, attackedPlayer):
+		if not self.is_player_normal(attackedPlayer):
+			print("Player {} is unavailable".format(attackedPlayer))
 			return False
 		card2 = attackedPlayer.hand[0]
 		if self is attackingPlayer.hand[0]:
@@ -244,7 +289,8 @@ class prince(cardType):
 		if there's nothing left they lose
 		'''
 
-		if not self.is_player_normal(attackingPlayer, attackedPlayer):
+		if not self.is_player_normal(attackedPlayer):
+			print("Player {} is unavailable".format(attackedPlayer))
 			return False
 
 		#countess must be played if prince or king
@@ -252,7 +298,11 @@ class prince(cardType):
 		if attackingPlayer.countess_condition():
 			print("You must play countess.")
 			return False
+		if attackedPlayer.hand[0].name == cardName.PRINCESS:
+			print("Princess discarded correctly")
+			attackedPlayer.status = status.ELIMINATED
 		if partialDeck == []:
+			print("The partialDeck is empty")
 			attackedPlayer.status = status.ELIMINATED
 		elif attackingPlayer is not attackedPlayer:
 			attackedPlayer.hand.clear()
@@ -260,12 +310,14 @@ class prince(cardType):
 		else:
 
 			#remove not self from hand so player can remove self later
-
+			print("You discarded your own hand")
 			if self is attackedPlayer.hand[0]:
 				attackedPlayer.hand.pop(1)
 				attackedPlayer.draw_card(partialDeck)
 			else:
 				attackedPlayer.hand.pop(0)
+				attackedPlayer.draw_card(partialDeck)
+
 		return True
 
 class king(cardType):
@@ -278,7 +330,8 @@ class king(cardType):
 		trade hands with other player
 		'''
 
-		if not self.is_player_normal(attackingPlayer, attackedPlayer):
+		if not self.is_player_normal(attackedPlayer):
+			print("Player {} is unavailable".format(attackedPlayer))
 			return False
 		if attackingPlayer.countess_condition():
 			print("You must play countess.")
@@ -308,6 +361,38 @@ class princess(cardType):
 		attackingPlayer.status = status.ELIMINATED
 		return True
 
+def play_game():
+	playerNo = 0
+	isWin = False
+
+	while not isWin:
+		playerList[playerNo].start_turn()
+
+		if DEBUG:
+			dump_info()
+
+		isWin, survivors = player.check_winner()
+		if isWin:
+			for p in survivors:
+				p.status = status.WINNER
+				break
+
+		playerNo = (playerNo + 1)%player.numPlayers
+
+#dump info of opponent for debug
+def dump_info():
+	for p in playerList:
+		print(p.playerNo)
+		print(p.status)
+		print()
+		for card in p.hand:
+			print(card.name)
+		print()
+		print()
+	print("partialDeck:")
+	for c in partialDeck:
+		print(c.name, end = " ")
+
 fullDeck = [
 	guard(), guard(), guard(), guard(), guard(), 
 	spy(), spy(),
@@ -318,38 +403,26 @@ fullDeck = [
 	countess(),
 	princess()]
 
-partialDeck = list(fullDeck)
 
-#dump info of opponent for debug
+for i in range(0,100000):
 
-def dump_info():
+	partialDeck = list(fullDeck)
+	player.numPlayers = 0
+	playerList = [player(), player()]
+
+	#initialize all AIs
 	for p in playerList:
-		print(p.playerNo)
-		print(p.status)
-		print()
-		for card in p.hand:
-			print(card.name)
-		print()
-		print()
+		p.AI = True
 
+	#playerList[0].hand.clear()
+	#playerList[0].hand.append(princess())
 
-playerList = [player(), player(),player()]
+	dump_info()
+	play_game()
+	dump_info()
 
-#playerList[0].hand.clear()
-#playerList[0].hand.append(princess())
-
-dump_info()
-
-playerNo = 0
-
-while len(partialDeck) > 0:
-	playerList[playerNo].start_turn()
-	playerNo = (playerNo + 1)%player.numPlayers
-
-#program continuous turns, end condition with 0 cards
-#TODO: program end conditions
-
-dump_info()
-
-#TODO: Create GarbageAI that inputs random numbers for a 4-person game
-#TODO: 
+#TODO: add neural network with inputs
+'''
+hand, previous cards, known cards input
+card, attackedplayer, guess output
+'''
