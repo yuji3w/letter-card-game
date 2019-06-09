@@ -1,6 +1,8 @@
 from enum import Enum
 from enum import IntEnum
 from random import randint
+import tensorflow as tf
+import numpy as np
 
 DEBUG = True
 
@@ -116,32 +118,39 @@ class player:
 				return True
 		return False
 
-	def start_turn(self, restart = False):
+	def start_turn(self, restart = False, tfAgent = False, action = 15):
 		if self.status == status.ELIMINATED:
 			return False
-		if not restart:
+		if not restart and not tfAgent:
 			self.draw_card(partialDeck)
 		self.status = status.NORMAL
 
 		#this is where the bot will be hooked up
 
-		print()
-		print(self.playerNo)
-		self.display_cards()
-		card = self.input_card(AI = self.AI)
-		while not self.card_in_hand(card):
-			print("This card is not in your hand.")
+		if not tfAgent:
+			print()
+			print(self.playerNo)
+			self.display_cards()
 			card = self.input_card(AI = self.AI)
-		card = self.matching_card_obj(card)
-		playerNo = self.input_player_no(AI = self.AI)
-		while playerNo > player.numPlayers - 1:
-			print("This player does not exist.")
+			while not self.card_in_hand(card):
+				print("This card is not in your hand.")
+				card = self.input_card(AI = self.AI)
+			card = self.matching_card_obj(card)
 			playerNo = self.input_player_no(AI = self.AI)
-		if card.name == cardName.GUARD:
-			print("Guess the card number.")
-			guess = self.input_card(AI = self.AI)
+			while playerNo > player.numPlayers - 1:
+				print("This player does not exist.")
+				playerNo = self.input_player_no(AI = self.AI)
+			if card.name == cardName.GUARD:
+				print("Guess the card number.")
+				guess = self.input_card(AI = self.AI)
+			else:
+				guess = cardName.GUARD
 		else:
-			guess = cardName.GUARD
+			#TODO: put this elsewhere later
+			if action == 1:
+				self.turn(playerList[playerNo], cardName.GUARD, guess)
+			#overhaul before changing everythin
+
 
 		self.turn(playerList[playerNo], card, guess)
 
@@ -361,37 +370,142 @@ class princess(cardType):
 		attackingPlayer.status = status.ELIMINATED
 		return True
 
-def play_game():
-	playerNo = 0
-	isWin = False
+class game:
+	global partialDeck, playerList, fullDeck
 
-	while not isWin:
-		playerList[playerNo].start_turn()
+	fullDeck = [
+		guard(), guard(), guard(), guard(), guard(), 
+		spy(), spy(),
+		baron(), baron(),
+		handmaiden(), handmaiden(),
+		prince(),
+		king(),
+		countess(),
+		princess()]
 
-		if DEBUG:
-			dump_info()
+	partialDeck = list(fullDeck)
+	player.numPlayers = 0
+	playerList = [player(), player()]
+	playerList[0].AI = True
+	playerList[1].AI = True
+	
+	def __init__(self):
+		self.playerNo = 0
+
+	def play_game():
+		global partialDeck, playerList, fullDeck
+		playerNo = 0
+		isWin = False
+
+		while not isWin:
+			playerList[playerNo].start_turn()
+
+			if DEBUG:
+				game.dump_info()
+
+			isWin, survivors = player.check_winner()
+			if isWin:
+				for p in survivors:
+					p.status = status.WINNER
+					break
+
+			playerNo = (playerNo + 1)%player.numPlayers
+
+	#dump info of opponent for debug
+	def dump_info():
+		global partialDeck, playerList, fullDeck
+		for p in playerList:
+			print(p.playerNo)
+			print(p.status)
+			print()
+			for card in p.hand:
+				print(card.name)
+			print()
+			print()
+		print("partialDeck:")
+		for c in partialDeck:
+			print(c.name, end = " ")
+
+	def step(self, action):
+		global partialDeck, playerList, fullDeck
+		print("hey this is the action:")
+		print(action)
+		#Assume 0-13
+		if(action == 14):
+			print("YOU MESSED UP, action should not be 14")
+			return 0, 0, 0
+		reward = 0
+		done = False
+		obs = []
+		isWin, survivors = player.check_winner()
+		if isWin:
+			done = True
+			return obs, reward, done
+
+		#2 players for ai, pass in action here
+		playerList[0].start_turn(tfAgent=True)
+		playerList[1].start_turn()
+
+		#return obs after drawing card
+		if len(partialDeck) > 0:
+			playerList[0].draw_card(partialDeck)
+		obs = self.return_observation(playerList[0])
 
 		isWin, survivors = player.check_winner()
 		if isWin:
-			for p in survivors:
-				p.status = status.WINNER
-				break
+			if playerList[0] in survivors:
+				reward = 1
+			else:
+				reward = -1
+			done = True
+			return obs, reward, done
 
-		playerNo = (playerNo + 1)%player.numPlayers
 
-#dump info of opponent for debug
-def dump_info():
-	for p in playerList:
-		print(p.playerNo)
-		print(p.status)
-		print()
-		for card in p.hand:
-			print(card.name)
-		print()
-		print()
-	print("partialDeck:")
-	for c in partialDeck:
-		print(c.name, end = " ")
+		self.playerNo = (self.playerNo + 1)%player.numPlayers
+
+		return obs, reward, done
+
+	def reset(self):
+		global partialDeck, playerList, fullDeck
+		self.playerNo = 0
+		partialDeck = list(fullDeck)
+		player.numPlayers = 0
+		playerList = [player(), player()]
+
+		playerList[0].draw_card(partialDeck)
+
+		obs = self.return_observation(playerList[self.playerNo])
+		return obs
+
+	def return_observation(self, attackingPlayer):
+		global partialDeck, playerList, fullDeck
+		hand = [0]*15
+		card1 = fullDeck.index(attackingPlayer.hand[0])
+		card2 = fullDeck.index(attackingPlayer.hand[1])
+		print(card1)
+		print(card2)
+		hand[card1] = 1
+		hand[card2] = 1
+
+		used = [0] * 15
+		for c in fullDeck:
+			if c not in partialDeck and c not in playerList[0].hand and c not in playerList[1].hand:
+				index = fullDeck.index(c)
+				used[index] = 1
+
+		#add spied, recurse later
+
+		observation = []
+		observation.extend(hand)
+		observation.extend(used)
+		observation = np.array(observation)
+
+		return observation
+
+
+
+
+
 
 fullDeck = [
 	guard(), guard(), guard(), guard(), guard(), 
@@ -404,25 +518,114 @@ fullDeck = [
 	princess()]
 
 
-for i in range(0,100000):
+def play_inifinite_ai():
+	for i in range(0,100000):
 
-	partialDeck = list(fullDeck)
-	player.numPlayers = 0
-	playerList = [player(), player()]
+		partialDeck = list(fullDeck)
+		player.numPlayers = 0
+		playerList = [player(), player()]
 
-	#initialize all AIs
-	for p in playerList:
-		p.AI = True
+		#initialize all AIs
+		playerList[0].AI = True
+		playerList[1].AI = True
 
-	#playerList[0].hand.clear()
-	#playerList[0].hand.append(princess())
+		#playerList[0].hand.clear()
+		#playerList[0].hand.append(princess())
 
-	dump_info()
-	play_game()
-	dump_info()
+		game.dump_info()
+		game.play_game()
+		game.dump_info()
+
+
+
+#TODO: fix all globals
+
 
 #TODO: add neural network with inputs
 '''
 hand, previous cards, known cards input
 card, attackedplayer, guess output
+'''
+
+num_inputs = 2 * 15
+num_hidden = int(2 * 14 * 1.5)
+num_outputs = 13
+
+initializer = tf.contrib.layers.variance_scaling_initializer()
+
+X = tf.placeholder(tf.float32, shape = [None, num_inputs])
+
+hidden_layer_one = tf.layers.dense(X, num_hidden,activation=tf.nn.relu,
+	kernel_initializer=initializer)
+
+hidden_layer_two = tf.layers.dense(hidden_layer_one,num_hidden,activation=tf.nn.relu,
+	kernel_initializer=initializer)
+
+output_layer = tf.layers.dense(hidden_layer_two, num_outputs,activation=tf.nn.sigmoid,
+	kernel_initializer=initializer)
+
+probabilities = tf.concat(axis=1,values=[output_layer])
+action = tf.multinomial(probabilities,num_samples=1)
+
+init = tf.global_variables_initializer()
+
+epi = 50
+step_limit = 500
+env = game()
+abg_steps = []
+
+with tf.Session() as sess:
+	init.run()
+
+	for i_episode in range(epi):
+		obs = env.reset()
+
+		for step in range(step_limit):
+			action_val = action.eval(feed_dict = {X:obs.reshape(1,num_inputs)})
+			obs,reward,done = env.step(action_val[0][0])
+
+			if done:
+				avg_steps.append(step)
+				print("Done after {} steps.".format(steps))
+				break
+
+
+
+
+
+
+#tf stuff
+'''
+observations = tf.placeholder(tf.int32, shape=(14,2))
+#maybe make int?
+
+actions = tf.placeholder(tf.float32, shape = [None])
+
+#model
+Y = tf.layers.dense(observations, 200, activation=tf.nn.relu)
+Ylogits = tf.layers.dense(Y,13)
+
+#sample an action from predicted probabilities
+sample_op = tf.multinomial(logits = Ylogits, num_samples=1)
+
+#loss
+cross_entropies = tf.losses.softmax_cross_entropy(onehot_labels=
+	tf.one_hot(actions,13), logits = Ylogits)
+
+loss = tf.reduce_sum(rewards * cross_entropies)
+
+#training operation
+optimizer = tf.train.RMSPropOptimizer(learning_rate=0.001, decay=.99)
+train_op = optimizer.minimize(loss)
+
+with tf.Session as sess:
+	...
+	observation = return_observation(playerList[0])
+	while not done: 
+		action = sess.run(sample_op, feed_dict = {observations: [observation]})
+		print("HEY HEY HEY")
+		reward = cardGame.step(action)
+		observations.append(observation)
+		actions.append(action)
+		rewards.append(reward)
 '''
