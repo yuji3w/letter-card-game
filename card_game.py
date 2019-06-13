@@ -116,7 +116,7 @@ class player:
 		return False
 
 	def start_turn(self, restart = False, action = False):
-		global playerNo
+		global playerNo, playerList
 		if self.status == status.ELIMINATED:
 			return False
 		if not restart and action == False:
@@ -151,7 +151,7 @@ class player:
 				return False
 
 
-		self.turn(playerList[playerNo], card, guess)
+		self.turn(playerList[playerNo], card, guess, action)
 
 	def turn(self, attackedPlayer, card, guess, action = False):
 		success = card.play(self, attackedPlayer, guess)
@@ -159,6 +159,9 @@ class player:
 			self.hand.remove(card)
 		else:
 			print("Your turn could not be completed.")
+			if action != False:
+				self.status = status.ELIMINATED
+				return False
 			self.start_turn(restart = True, action = action)
 
 class cardType:
@@ -425,11 +428,13 @@ def return_observation(attackingPlayer):
 	global partialDeck, playerList, fullDeck
 	hand = [0]*16
 	card1 = fullDeck.index(attackingPlayer.hand[0])
-	card2 = fullDeck.index(attackingPlayer.hand[1])
 	print(card1)
-	print(card2)
 	hand[card1] = 1
-	hand[card2] = 1
+
+	if len(attackingPlayer.hand) == 2:
+		card2 = fullDeck.index(attackingPlayer.hand[1])
+		print(card2)
+		hand[card2] = 1
 
 	used = [0] * 16
 	for c in fullDeck:
@@ -523,7 +528,7 @@ def step(action):
 	obs = []
 
 	global playerNo
-	print("Your action is " + str(action))
+	print("Your action is {}".format(action))
 	
 	#not sure if I should include this because after should deal with it
 
@@ -532,7 +537,11 @@ def step(action):
 		return obs, reward, done
 
 	playerList[0].start_turn(action = action)
-	playerList[1].start_turn()
+
+	#make sure AI doesn't attack eliminated player
+
+	if playerList[0].status != status.ELIMINATED:
+		playerList[1].start_turn()
 
 	#return obs after drawing card
 	if len(partialDeck) > 0:
