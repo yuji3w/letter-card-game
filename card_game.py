@@ -144,10 +144,11 @@ class player:
 			else:
 				guess = cardName.GUARD
 		else:
-			#TODO: put this elsewhere later
-			if action == 1:
-				self.turn(playerList[playerNo], cardName.GUARD, guess, action = action)
-			#overhaul before changing everythin
+			playerNo, card, guess = play_action_turn(self, action)
+			card = self.matching_card_obj(card)
+			if card is None:
+				self.status = status.ELIMINATED
+				return False
 
 
 		self.turn(playerList[playerNo], card, guess)
@@ -390,6 +391,8 @@ def reset():
 	playerList[0].draw_card(partialDeck)
 	playerList[1].AI = True
 
+	return return_observation(playerList[0])
+
 def play_game():
 	playerNo = 0
 	isWin = False
@@ -444,25 +447,83 @@ def return_observation(attackingPlayer):
 	return observation
 
 def play_action_turn(attackingPlayer, action):
-	if action < 7:
+	global playerList
+	guess = cardName.GUARD
+
+	if action < 8:
 
 		#get equivalent card name (cards start at 1)
-
-		guess = action + 1
+		p = 0
+		guess = action
 		guess = cardName(guess)
-		attackingPlayer.turn(playerList[playerNo], cardName.GUARD, guess)
+		card = cardName.GUARD
 
-	if action == 1:
-				self.turn(playerList[playerNo], cardName.GUARD, guess)
+	elif action < 14:
+		p = 1
+		guess = action - 6
+		guess = cardName(guess)
+		card = cardName.GUARD
+
+	elif action == 14:
+		p = 0
+		card = cardName.SPY
+
+	elif action == 15:
+		p = 1
+		card = cardName.SPY
+
+	elif action == 16:
+		p = 0
+		card = cardName.BARON
+
+	elif action == 17:
+		p = 1
+		card = cardName.BARON
+
+	elif action == 18:
+		p = 0
+		card = cardName.HANDMAIDEN
+
+	elif action == 19:
+		p = 0
+		card = cardName.PRINCE
+
+	elif action == 20:
+		p = 1
+		card = cardName.PRINCE
+
+	elif action == 21:
+		p = 0
+		card = cardName.KING
+
+	elif action == 22:
+		p = 1
+		card = cardName.KING
+
+	elif action == 23:
+		p = 0
+		card = cardName.COUNTESS
+
+	elif action == 24:
+		p = 0
+		card = cardName.PRINCESS
+	
+	return p, card, guess
+
+	
+
+
+
 
 
 def step(action):
+	action = action + 2
 	reward = 0
 	done = False
 	obs = []
 
 	global playerNo
-	print("Your action is" + str(action))
+	print("Your action is " + str(action))
 	
 	#not sure if I should include this because after should deal with it
 
@@ -470,7 +531,7 @@ def step(action):
 	if done:
 		return obs, reward, done
 
-	playerList[0].start_turn(action)
+	playerList[0].start_turn(action = action)
 	playerList[1].start_turn()
 
 	#return obs after drawing card
@@ -481,19 +542,19 @@ def step(action):
 	done, survivors = player.check_winner()
 	if done:
 		if playerList[0] in survivors:
-			reward = 100
+			reward = 1
 		else:
-			reward = -100
+			reward = -1
 		done = True
 		return obs, reward, done
 
 	return obs, reward, done
 
-
+'''
 reset()
 playerList[1].AI = True
 dump_info()
-action = randint(0,13)
+action = randint(0,23)
 obs, reward, done = step(action)
 dump_info()
 print("ACTION:")
@@ -504,7 +565,7 @@ print("REWARD:")
 print(reward)
 print("DONE:")
 print(done)
-
+'''
 
 
 

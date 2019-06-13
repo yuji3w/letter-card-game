@@ -1,12 +1,12 @@
 import tensorflow as tf
 import numpy as np
-import card_game as *
+from card_game import *
 
 
 
-num_inputs = 2 * 15
-num_hidden = int(2 * 14 * 1.5)
-num_outputs = 13
+num_inputs = 2 * 16
+num_hidden = int(2 * num_inputs * 1.5)
+num_outputs = 23
 
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
@@ -18,7 +18,10 @@ hidden_layer_one = tf.layers.dense(X, num_hidden,activation=tf.nn.relu,
 hidden_layer_two = tf.layers.dense(hidden_layer_one,num_hidden,activation=tf.nn.relu,
 	kernel_initializer=initializer)
 
-output_layer = tf.layers.dense(hidden_layer_two, num_outputs,activation=tf.nn.sigmoid,
+hidden_layer_three = tf.layers.dense(hidden_layer_two,num_hidden,activation=tf.nn.relu,
+	kernel_initializer=initializer)
+
+output_layer = tf.layers.dense(hidden_layer_three, num_outputs,activation=tf.nn.sigmoid,
 	kernel_initializer=initializer)
 
 probabilities = tf.concat(axis=1,values=[output_layer])
@@ -26,26 +29,31 @@ action = tf.multinomial(probabilities,num_samples=1)
 
 init = tf.global_variables_initializer()
 
-epi = 50
+epi = 50000
 step_limit = 500
-env = game()
-abg_steps = []
+#env = game()
+avg_steps = []
+rewards = []
 
 with tf.Session() as sess:
 	init.run()
 
 	for i_episode in range(epi):
-		obs = env.reset()
+		obs = reset()
 
-		for step in range(step_limit):
+		for s in range(step_limit):
 			action_val = action.eval(feed_dict = {X:obs.reshape(1,num_inputs)})
-			obs,reward,done = env.step(action_val[0][0])
+			obs,reward,done = step(action_val[0][0])
 
 			if done:
-				avg_steps.append(step)
-				print("Done after {} steps.".format(steps))
+				print("Reward: " + str(reward))
+				rewards.append(reward)
+				avg_steps.append(s)
+				#print("Done after {} steps.".format(s))
+				print("The sum of your rewards is {}".format(sum(rewards)))
 				break
 
+print(sum(rewards))
 
 
 
