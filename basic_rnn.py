@@ -1,12 +1,15 @@
 import tensorflow as tf
 import numpy as np
 from card_game import *
+from collections import Counter
 
 
 
 num_inputs = 2 * 16
-num_hidden = int(2 * num_inputs * 1.5)
 num_outputs = 23
+num_hidden = 32 * 4 #orig average of input, output
+
+learning_rate = 0.01
 
 initializer = tf.contrib.layers.variance_scaling_initializer()
 
@@ -33,7 +36,9 @@ epi = 50000
 step_limit = 500
 #env = game()
 avg_steps = []
-rewards = []
+rewards = 0
+num_wins = 0
+lose_action_list = []
 
 with tf.Session() as sess:
 	init.run()
@@ -44,16 +49,23 @@ with tf.Session() as sess:
 		for s in range(step_limit):
 			action_val = action.eval(feed_dict = {X:obs.reshape(1,num_inputs)})
 			obs,reward,done = step(action_val[0][0])
+			print(obs)
 
 			if done:
 				print("Reward: " + str(reward))
-				rewards.append(reward)
+				rewards += reward
 				avg_steps.append(s)
 				#print("Done after {} steps.".format(s))
-				print("The sum of your rewards is {}".format(sum(rewards)))
+				print("The sum of your rewards is {}".format(rewards))
+				lose_action_list.append(action)
+				if reward == 10:
+					num_wins += 1
 				break
 
-print(sum(rewards))
+print(rewards)
+print("We won {} percent of games".format(num_wins/epi*100))
+
+#print(lose_action_list)
 
 
 

@@ -88,6 +88,7 @@ class player:
 		for p in playerList:
 			if p.status == status.NORMAL or p.status == status.PROTECTED:
 				survivors.append(p)
+
 		if len(survivors) < 2:
 			print("There is 1 or 0 players remaining.")
 			return True, survivors
@@ -103,7 +104,7 @@ class player:
 			for p in survivors:
 				if p.hand[0].name.value == bestCard:
 					winners.append(p)
-				return True, winners
+			return True, winners
 
 
 		return False, survivors
@@ -160,6 +161,7 @@ class player:
 		else:
 			print("Your turn could not be completed.")
 			if action != False:
+				print("You lost due to your action: {}".format(action))
 				self.status = status.ELIMINATED
 				return False
 			self.start_turn(restart = True, action = action)
@@ -522,6 +524,7 @@ def play_action_turn(attackingPlayer, action):
 
 
 def step(action):
+	action = action.item()
 	action = action + 2
 	reward = 0
 	done = False
@@ -541,6 +544,8 @@ def step(action):
 	#make sure AI doesn't attack eliminated player
 
 	if playerList[0].status != status.ELIMINATED:
+		reward = 1
+		print("WHAT's HAPPENING")
 		playerList[1].start_turn()
 
 	#return obs after drawing card
@@ -551,7 +556,8 @@ def step(action):
 	done, survivors = player.check_winner()
 	if done:
 		if playerList[0] in survivors:
-			reward = 1
+			print("You won")
+			reward = 10
 		else:
 			reward = -1
 		done = True
